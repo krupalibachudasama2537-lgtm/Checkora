@@ -176,7 +176,7 @@ body {
     color: #6a6a8a;
     margin-bottom: 8px;
     font-weight: 600;
-    overflow: visible;
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
