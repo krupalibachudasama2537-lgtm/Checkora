@@ -165,7 +165,9 @@ body {
     border: 1px solid #252545;
     border-radius: 8px;
     padding: 14px;
-    width: 200px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+    min-width: 250px;
 }
 .card-title {
     font-size: 0.7rem;
@@ -174,7 +176,7 @@ body {
     color: #6a6a8a;
     margin-bottom: 8px;
     font-weight: 600;
-    overflow: hidden;
+    overflow: visible;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
