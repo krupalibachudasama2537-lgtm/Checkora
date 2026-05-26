@@ -1477,6 +1477,9 @@
                 if (resignBtn) resignBtn.style.display = 'none';
                 if (drawBtn) drawBtn.style.display = 'none';
                 if (pauseBtn) pauseBtn.style.display = 'none';
+                if (newPvPBtn) newPvPBtn.style.display = '';
+                if (newAIBtn) newAIBtn.style.display = '';
+                if (newFenBtn) newFenBtn.style.display = '';
 
                 let durationText = '';
 
@@ -1789,15 +1792,32 @@
             }
 
             async function resumeGame() {
-                if (!paused) return;
-                const d = await post('/api/pause/', { pause: false });
-                paused = d.paused;
-                whiteTime = d.white_time;
-                blackTime = d.black_time;
-                updatePauseUI();
-                renderClocks();
-                startTimer();
-                queueAIMoveIfNeeded();
+                try {
+                    const d = await post('/api/pause/', { pause: false });
+
+                    paused = false;
+
+                    if (d.white_time !== undefined) {
+                        whiteTime = d.white_time;
+                    }
+
+                    if (d.black_time !== undefined) {
+                        blackTime = d.black_time;
+                    }
+
+                    updatePauseUI();
+                    renderClocks();
+
+                    clearInterval(timerInterval);
+                    startTimer();
+
+                    boardEl.classList.remove('paused');
+
+                    queueAIMoveIfNeeded();
+
+                } catch (e) {
+                    console.error("Resume failed", e);
+                }
             }
 
             /* ==========================================================
@@ -1969,6 +1989,9 @@
                 }
                 if (pauseBtn) pauseBtn.style.display = '';
                 if (drawBtn) drawBtn.style.display = (gameMode === 'pvp') ? 'block' : 'none';
+                if (newPvPBtn) newPvPBtn.style.display = 'none';
+                if (newAIBtn) newAIBtn.style.display = 'none';
+                if (newFenBtn) newFenBtn.style.display = 'none';
                 if (gameMode === 'ai') {
                     flipped = (playerColor === 'black');
                 } else {
@@ -2129,6 +2152,44 @@
                     }
                 }
                 if (errorDiv) errorDiv.style.display = 'none';
+            }
+
+            function dismissGameOverOverlay() {
+                gameOverOverlay.classList.remove('active');
+                gameOverOverlay.classList.remove('game-over-celebration');
+                const confettiContainer = gameOverOverlay.querySelector('.confetti-container');
+                if (confettiContainer) {
+                    confettiContainer.remove();
+                }
+            }
+
+            function openWelcomeForNewGame() {
+                dismissGameOverOverlay();
+                prepareWelcomeForPvP(true);
+
+                const whiteInput = document.getElementById('whiteNameInput');
+                const blackInput = document.getElementById('blackNameInput');
+                if (whiteInput) {
+                    whiteInput.value = currentWhiteName || '';
+                }
+                if (blackInput) {
+                    const aiNames = ['AI', 'ai'];
+                    blackInput.value = aiNames.includes(currentBlackName) ? '' : (currentBlackName || '');
+                }
+                if (welcomeFenInput) welcomeFenInput.value = '';
+                if (welcomeFenError) welcomeFenError.textContent = '';
+
+                selectedPveColor = 'white';
+                pveOptions?.querySelectorAll('.color-choice').forEach(btn => {
+                    const isWhite = btn.dataset.color === 'white';
+                    btn.classList.toggle('active', isWhite);
+                    btn.style.borderColor = isWhite ? '#f0c040' : '#444';
+                });
+
+                if (welcomeResumeBtn && gameOver) {
+                    welcomeResumeBtn.style.display = 'none';
+                }
+                welcomeOverlay.classList.add('active');
             }
 
             if (welcomeFenInput) {
@@ -2344,8 +2405,7 @@
                     "Abandon Game?",
                     "Your current progress will be lost.<br>Are you sure you want to start a new game?",
                     () => {
-                        prepareWelcomeForPvP(true);
-                        welcomeOverlay.classList.add('active');
+                        openWelcomeForNewGame();
                     },
                     '#ff6b6b'
                 );
@@ -2428,7 +2488,7 @@
             }
 
             if (resignBtn) resignBtn.onclick = () => {
-                if (!gameOver && !paused) {
+                if (!gameOver) {
                     showConfirm("Resign?", "Are you sure you want to resign?", async () => {
                         try {
                             const result = await post('/api/resign/', {});
@@ -2461,31 +2521,32 @@
             };
 
             if (gameOverStartBtn) gameOverStartBtn.onclick = () => {
-                const mode = document.querySelector('input[name="go_mode"]:checked').value;
-                const diff = document.getElementById('goDifficultySelect').value;
-                const timeLimitMins = parseInt(document.getElementById('goTimerSelect').value, 10);
-                gameOverOverlay.classList.remove('active');
-                gameOverOverlay.classList.remove('game-over-celebration');
-
-                const confettiContainer = gameOverOverlay.querySelector('.confetti-container');
-                if (confettiContainer) {
-                 confettiContainer.remove();
-                }
-
-                const swappedColor = playerColor === 'white' ? 'black' : 'white';
-                if (mode === 'ai') {
-                    showSideSelectionModal(side => startNewGame(mode, side, diff, null, timeLimitMins));
-                }
-               
-                else {
-                    startNewGame(mode, swappedColor, diff, null, timeLimitMins,
-                        { white: currentBlackName, black: currentWhiteName });
-                }
+                openWelcomeForNewGame();
             };
            if (gameOverExitBtn) gameOverExitBtn.addEventListener('click', () => {
     const confettiContainer = gameOverOverlay.querySelector('.confetti-container');
     if (confettiContainer) confettiContainer.remove();
 });
+
+            // ========== Exit to Menu Logic ==========
+            const exitToMenuBtn = document.getElementById('exitToMenuBtn');
+            if (exitToMenuBtn) {
+                exitToMenuBtn.onclick = () => {
+                    // 1. Hide the Game Over modal and clear celebrations
+                    gameOverOverlay.classList.remove('active', 'game-over-celebration');
+                    const confettiContainer = gameOverOverlay.querySelector('.confetti-container');
+                    if (confettiContainer) {
+                        confettiContainer.remove();
+                    }
+
+                    // 2. Hide the chess board layout
+                    gameLayout.style.visibility = 'hidden';
+
+                    // 3. Reset and show the Welcome/Setup Menu
+                    prepareWelcomeForPvP(true);
+                    welcomeOverlay.classList.add('active');
+                };
+            }
 
             // Theme Switcher
             function initThemeSwitcher() {
@@ -2941,5 +3002,28 @@ if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
                 touchDragSrc = null;
                 touchDragging = false;
             }, { passive: false });
+
+            boardEl.addEventListener('touchcancel', (e) => {
+                if (!touchDragSrc) return;
+
+                if (touchDragging) {
+                    const srcSquareEl = sq(touchDragSrc.r, touchDragSrc.c);
+                    const pieceImg = srcSquareEl ? srcSquareEl.querySelector('.piece') : null;
+                    if (pieceImg) {
+                        pieceImg.classList.remove('touch-dragging-original');
+                    }
+
+                    if (activeTouchPieceClone) {
+                        activeTouchPieceClone.remove();
+                        activeTouchPieceClone = null;
+                    }
+
+                    deselect();
+                }
+
+                touchStartPos = null;
+                touchDragSrc = null;
+                touchDragging = false;
+            }, { passive: true });
 
 })();
