@@ -34,6 +34,7 @@
             let touchStartPos = null;
             let activeTouchPieceClone = null;
             let touchDragSrc = null;
+            let touchTapSquare = null;
             let touchDragging = false;
             let touchOffset = { x: 0, y: 0 };
 
@@ -693,7 +694,7 @@
                             const textNode = document.createTextNode(`AI (${playerColor === 'white' ? 'BLACK' : 'WHITE'}) `);
                             const badge = document.createElement('span');
                             badge.textContent = diffLabel;
-                            badge.style.cssText = 'color:#f0c040 !important; font-weight:700; font-size:1.20em; letter-spacing:1px;';
+                            badge.style.cssText = 'color:#f0c040 !important; font-weight:700; font-size:0.95em; letter-spacing:0.2px;';
                             badge.setAttribute('aria-label', `AI difficulty: ${diffLabel}`);
                             aiLabel.appendChild(textNode);
                             aiLabel.appendChild(badge);
@@ -1747,15 +1748,15 @@
                     if (resultState === 'victory') {
                         bannerEl.classList.add('banner-victory');
                         if (bannerIconEl) bannerIconEl.textContent = '🏆';
-                        gameOverTitle.textContent = gameMode === 'pvp' ? '🏆 VICTORY 🏆' : '🏆 VICTORY 🏆';
+                        gameOverTitle.textContent = 'VICTORY';
                     } else if (resultState === 'defeat') {
                         bannerEl.classList.add('banner-defeat');
                         if (bannerIconEl) bannerIconEl.textContent = '💀';
-                        gameOverTitle.textContent = '💀 DEFEAT 💀';
+                        gameOverTitle.textContent = 'DEFEAT';
                     } else {
                         bannerEl.classList.add('banner-draw');
                         if (bannerIconEl) bannerIconEl.textContent = '🤝';
-                        gameOverTitle.textContent = '🤝 DRAW 🤝';
+                        gameOverTitle.textContent = 'DRAW';
                     }
                 }
                 
@@ -2437,10 +2438,10 @@
                     const strVal = String(timeLimitMins);
                     if (strVal.includes('|')) {
                         const parts = strVal.split('|');
-                        currentMins = parseInt(parts[0], 10) || 10;
+                        currentMins = parseFloat(parts[0]) || 10;
                         currentInc = parseInt(parts[1], 10) || 0;
                     } else {
-                        currentMins = parseInt(strVal, 10) || 10;
+                        currentMins = parseFloat(strVal) || 10;
                         currentInc = 0;
                     }
                 }
@@ -3421,13 +3422,11 @@ if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
 
                 if (!isPremoveDrag && !isNormalDrag) return;
 
-                touchStartPos = { x: touch.clientX, y: touch.clientY };
                 touchDragSrc = { r, c };
-                touchDragging = false;
             }, { passive: true });
 
             boardEl.addEventListener('touchmove', (e) => {
-                if (!touchDragSrc) return;
+                if (!touchDragSrc || !touchStartPos) return;
 
                 const touch = e.touches[0];
                 
@@ -3482,12 +3481,12 @@ if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
             }, { passive: false });
 
             boardEl.addEventListener('touchend', (e) => {
-                if (!touchDragSrc) return;
+                if (!touchStartPos) return;
 
                 const touch = e.changedTouches[0];
                 let movedToSquare = false;
 
-                if (touchDragging) {
+                if (touchDragging && touchDragSrc) {
                     // Clean up original piece transparency
                     const srcSquareEl = sq(touchDragSrc.r, touchDragSrc.c);
                     const pieceImg = srcSquareEl ? srcSquareEl.querySelector('.piece') : null;
@@ -3505,8 +3504,8 @@ if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
                     const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
                     const destSquareEl = targetEl ? targetEl.closest('.square') : null;
                     if (destSquareEl) {
-                        const tr = parseInt(destSquareEl.dataset.r);
-                        const tc = parseInt(destSquareEl.dataset.c);
+                        const tr = parseInt(destSquareEl.dataset.r, 10);
+                        const tc = parseInt(destSquareEl.dataset.c, 10);
 
                         if (tr !== touchDragSrc.r || tc !== touchDragSrc.c) {
                             tryMove(touchDragSrc.r, touchDragSrc.c, tr, tc);
@@ -3521,20 +3520,29 @@ if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
                     // Prevent click generation
                     e.preventDefault();
                 } else {
-                    // Quick tap -> trigger default click/tap behavior
-                    onClick(touchDragSrc.r, touchDragSrc.c);
+                    // Quick tap -> allow tap-to-select and tap-to-destination behavior
+                    const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+                    const tapSquareEl = targetEl ? targetEl.closest('.square') : null;
+                    const tapR = tapSquareEl ? parseInt(tapSquareEl.dataset.r, 10) : touchTapSquare?.r;
+                    const tapC = tapSquareEl ? parseInt(tapSquareEl.dataset.c, 10) : touchTapSquare?.c;
+
+                    if (Number.isInteger(tapR) && Number.isInteger(tapC)) {
+                        onClick(tapR, tapC);
+                        e.preventDefault();
+                    }
                 }
 
                 // Reset state
                 touchStartPos = null;
                 touchDragSrc = null;
+                touchTapSquare = null;
                 touchDragging = false;
             }, { passive: false });
 
             boardEl.addEventListener('touchcancel', (e) => {
-                if (!touchDragSrc) return;
+                if (!touchStartPos) return;
 
-                if (touchDragging) {
+                if (touchDragging && touchDragSrc) {
                     const srcSquareEl = sq(touchDragSrc.r, touchDragSrc.c);
                     const pieceImg = srcSquareEl ? srcSquareEl.querySelector('.piece') : null;
                     if (pieceImg) {
@@ -3551,6 +3559,7 @@ if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
 
                 touchStartPos = null;
                 touchDragSrc = null;
+                touchTapSquare = null;
                 touchDragging = false;
             }, { passive: true });
 
@@ -3614,37 +3623,60 @@ if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
                     applyCustomBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         const minsInput = document.getElementById('customMinsInput');
+                        const secsInput = document.getElementById('customSecsInput');
                         const incInput = document.getElementById('customIncInput');
 
                         if (minsInput && incInput) {
                             let mins = parseInt(minsInput.value, 10);
+                            let secs = secsInput ? parseInt(secsInput.value, 10) : 0;
                             let inc = parseInt(incInput.value, 10);
 
-                            if (isNaN(mins) || mins < 1) mins = 10;
+                            if (isNaN(mins) || mins < 0) mins = 0;
                             if (mins > 300) mins = 300;
+                            if (isNaN(secs) || secs < 0) secs = 0;
+                            if (secs > 59) secs = 59;
                             if (isNaN(inc) || inc < 0) inc = 0;
                             if (inc > 180) inc = 180;
 
+                            const totalSecs = mins * 60 + secs;
+                            if (totalSecs <= 0) {
+                                // Require at least 1 second of game time
+                                if (secsInput) secsInput.value = 30;
+                                secs = 30;
+                            }
+
                             minsInput.value = mins;
+                            if (secsInput) secsInput.value = secs;
                             incInput.value = inc;
 
-                            selectedMins = mins;
+                            // selectedMins stores total minutes as a decimal (e.g. 0.5 for 30s)
+                            selectedMins = (mins * 60 + secs) / 60;
                             selectedIncrement = inc;
 
                             // Update active preset styling
                             presetBtns.forEach(b => b.classList.remove('active'));
 
-                            if (inc > 0) {
-                                display.textContent = `${mins} | ${inc}`;
+                            // Build a human-readable display string
+                            let displayText;
+                            const finalTotalSecs = mins * 60 + secs;
+                            if (mins === 0) {
+                                displayText = `${secs}s`;
+                            } else if (secs === 0) {
+                                displayText = `${mins} min`;
                             } else {
-                                display.textContent = `${mins} min`;
+                                displayText = `${mins}:${String(secs).padStart(2, '0')} min`;
                             }
+                            if (inc > 0) {
+                                displayText += ` | ${inc}`;
+                            }
+                            display.textContent = displayText;
 
                             // Close popover
                             popover.style.display = 'none';
                         }
                     });
                 }
+
 
                 // Close popover when clicking anywhere else
                 document.addEventListener('click', (e) => {
