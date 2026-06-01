@@ -593,16 +593,8 @@ def register_view(request):
                     deleted = True
                 else:
                     # 2. Username conflict (Free up unverified, abandoned usernames)
-                    if User.objects.filter(
-                        username=username, 
-                        email=email,
-                        is_active=False
-                    ).exists():
-                        User.objects.filter(
-                            username=username, 
-                            email=email,
-                            is_active=False
-                        ).delete()
+                    if User.objects.filter(username=username, is_active=False).exists():
+                        User.objects.filter(username=username, is_active=False).delete()
                         deleted = True
                     # 3. Email conflict (Free up unverified, abandoned emails)
                     if User.objects.filter(email=email, is_active=False).exists():
@@ -711,10 +703,7 @@ def verify_otp(request):
         if otp_created_at:
             if time.time() - otp_created_at > 300:
                 try:
-                    user = User.objects.get(
-                    id=user_id,
-                    is_active=False
-                    )
+                    user = User.objects.get(id=user_id, is_active=False)
                     user.delete()
                 except User.DoesNotExist:
                     pass
@@ -761,7 +750,7 @@ def verify_otp(request):
                         from_email=settings.EMAIL_HOST_USER,
                         to=[user.email],
                     )
-                    email.attach_alternative(html_content,"text/html")
+                    email.attach_alternative(html_content, "text/html")
                     email.send(fail_silently=True)
                 
                 except Exception as e:
