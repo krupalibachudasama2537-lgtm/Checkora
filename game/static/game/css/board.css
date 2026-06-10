@@ -1787,6 +1787,22 @@ body {
 /* ================= PAUSE STATE ================= */
 .chessboard.paused {
     pointer-events: auto;
+    cursor: pointer;
+}
+
+.chessboard.paused .square {
+    pointer-events: none;
+    filter: blur(15px);
+}
+.chessboard.paused::before {
+    content: "Press P or click Resume to continue";
+    position: absolute;
+    bottom: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1rem;   /* smaller than main label */
+    color: #ddd;
+}
 
 @media (max-width: 768px) {
   .m-fab {

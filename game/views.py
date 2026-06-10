@@ -3,6 +3,8 @@ import logging
 import json
 import time
 import hashlib
+import math
+import ipaddress
 import secrets
 import secrets as secrets_module
 from django.http import HttpResponseServerError
@@ -28,6 +30,7 @@ from django.utils.text import slugify
 from .progression import award_xp
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
+from django.forms.utils import ErrorDict
 from django.contrib.auth.views import PasswordResetView
 from smtplib import SMTPException
 from django.core.mail import (
@@ -56,6 +59,12 @@ from .models import (
     UserProgress,
 )
 logger = logging.getLogger(__name__)
+
+# Brute force protection parameters
+LOCKOUT_SECONDS = 900
+USERNAME_MAX_FAILS = 10
+IP_MAX_FAILS = 20
+
 from game.services import (
     cleanup_stale_games,
     check_game_achievements,
@@ -1098,10 +1107,7 @@ class CustomPasswordResetView(PasswordResetView):
         return f'{ip_key}:expires'
 
     def _client_ip(self, request):
-        forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if forwarded_for:
-            return forwarded_for.split(',')[0].strip()
-        return request.META.get('REMOTE_ADDR', 'unknown')
+        return get_client_ip(request)
 
     def _format_duration(self, seconds):
         seconds = max(1, int(seconds))
@@ -1249,26 +1255,241 @@ class CustomPasswordResetView(PasswordResetView):
         return response
 
 
+def _is_trusted_proxy(ip_text, trusted_entries):
+    """Check if an IP address matches trusted proxy entries (IP or CIDR)."""
+    try:
+        ip_obj = ipaddress.ip_address(ip_text)
+    except ValueError:
+        return False
+    for entry in trusted_entries:
+        try:
+            if "/" in entry:
+                if ip_obj in ipaddress.ip_network(entry, strict=False):
+                    return True
+            elif ip_obj == ipaddress.ip_address(entry):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def get_client_ip(request):
+    """Get client IP address safely by parsing trusted proxies."""
+    remote_addr = request.META.get('REMOTE_ADDR', 'unknown')
+    trusted_proxies = getattr(
+        settings, 'TRUSTED_PROXIES', ['127.0.0.1', '::1']
+    )
+    if not _is_trusted_proxy(remote_addr, trusted_proxies):
+        return remote_addr
+
+    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    hops = [
+        h.strip() for h in forwarded_for.split(',') if h.strip()
+    ]
+    for hop in reversed(hops):
+        if not _is_trusted_proxy(hop, trusted_proxies):
+            return hop
+    return remote_addr
+
+
+def normalize_username(username):
+    """Normalize the username by stripping whitespace and converting to lowercase."""
+    return (username or '').strip().lower()
+
+
+def get_username_fail_count_key(username):
+    """Get the cache key for username failed login attempts."""
+    normalized = normalize_username(username)
+    digest = hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+    return f'login_fail_count:user:{digest}'
+
+
+def get_username_lockout_key(username):
+    """Get the cache key for username lockout state."""
+    normalized = normalize_username(username)
+    digest = hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+    return f'login_lockout:user:{digest}'
+
+
+def get_ip_fail_count_key(ip):
+    """Get the cache key for IP failed login attempts."""
+    digest = hashlib.sha256(ip.encode('utf-8')).hexdigest()
+    return f'login_fail_count:ip:{digest}'
+
+
+def get_ip_lockout_key(ip):
+    """Get the cache key for IP lockout state."""
+    digest = hashlib.sha256(ip.encode('utf-8')).hexdigest()
+    return f'login_lockout:ip:{digest}'
+
+
+def increment_counter(key, timeout):
+    """Increment cache value atomically or fall back safely."""
+    # DatabaseCache does not provide atomic incr, so force fallback lock.
+    is_db_cache = cache.__class__.__name__ == 'DatabaseCache'
+    if not is_db_cache:
+        try:
+            if cache.add(key, 1, timeout=timeout):
+                return 1
+            else:
+                return cache.incr(key)
+        except (ValueError, TypeError):
+            pass
+
+    lock_key = f"lock:{key}"
+    acquired = False
+    # Spin lock: attempt to acquire for up to 5 seconds
+    for _ in range(100):
+        if cache.add(lock_key, 1, timeout=10):
+            acquired = True
+            break
+        time.sleep(0.05)
+
+    if not acquired:
+        # fail closed for brute-force logic without taking down login
+        current = cache.get(key)
+        try:
+            current = int(current) if current is not None else 0
+        except (ValueError, TypeError):
+            current = 0
+        next_val = current + 1
+        cache.set(key, next_val, timeout=timeout)
+        return next_val
+
+    try:
+        val = cache.get(key)
+        try:
+            val = int(val) if val is not None else 0
+        except (ValueError, TypeError):
+            val = 0
+        val += 1
+        cache.set(key, val, timeout=timeout)
+        return val
+    finally:
+        if acquired:
+            cache.delete(lock_key)
+
+
 def login_view(request):
     if request.user.is_authenticated:
         return redirect('landing')
 
     if request.method == 'POST':
+        username = request.POST.get('username', '')
+        client_ip = get_client_ip(request)
+
+        username_lockout_key = get_username_lockout_key(username)
+        ip_lockout_key = get_ip_lockout_key(client_ip)
+
+        ip_lockout_expiry = cache.get(ip_lockout_key)
+        username_lockout_expiry = cache.get(username_lockout_key)
+
+        # 1. IP Lockout Check
+        if ip_lockout_expiry is not None:
+            remaining_seconds = ip_lockout_expiry - time.time()
+            if remaining_seconds <= 0:
+                cache.delete(ip_lockout_key)
+            else:
+                remaining_minutes = max(
+                    1, int(math.ceil(remaining_seconds / 60))
+                )
+                error_message = (
+                    f"Too many login attempts from this IP address. "
+                    f"Try again in {remaining_minutes} minutes."
+                )
+                form = AuthenticationForm(data=request.POST)
+                form.add_error(None, error_message)
+                return render(request, 'game/login.html', {'form': form})
+
+        # 2. Username Lockout Check
+        if username_lockout_expiry is not None:
+            remaining_seconds = username_lockout_expiry - time.time()
+            if remaining_seconds <= 0:
+                cache.delete(username_lockout_key)
+            else:
+                remaining_minutes = max(
+                    1, int(math.ceil(remaining_seconds / 60))
+                )
+                error_message = (
+                    f"This account is temporarily locked. "
+                    f"Try again in {remaining_minutes} minutes."
+                )
+                form = AuthenticationForm(data=request.POST)
+                form.add_error(None, error_message)
+                return render(request, 'game/login.html', {'form': form})
+
         form = AuthenticationForm(data=request.POST)
         if form.is_valid():
             user = form.get_user()
+
+            # Clear username lockout and failure counter on successful login
+            username_input = request.POST.get('username', '')
+            cache.delete(get_username_fail_count_key(username_input))
+            cache.delete(get_username_lockout_key(username_input))
+            cache.delete(get_username_fail_count_key(user.username))
+            cache.delete(get_username_lockout_key(user.username))
+
             login(request, user)
             request.session.cycle_key()  # Prevent session fixation
 
             remember_me = request.POST.get('remember_me')
-
             if remember_me:
                 request.session.set_expiry(1209600)  # 2 weeks
             else:
-                request.session.set_expiry(0)# Browser close
+                request.session.set_expiry(0)  # Browser close
 
-            messages.success(request, f'Welcome back, {user.username}! Login successful.')
+            messages.success(
+                request,
+                f'Welcome back, {user.username}! Login successful.'
+            )
             return redirect('landing')
+        else:
+            # Login failed: track failed attempts
+            username_fails = 0
+            if username:
+                username_fail_count_key = (
+                    get_username_fail_count_key(username)
+                )
+                username_fails = increment_counter(
+                    username_fail_count_key, timeout=LOCKOUT_SECONDS
+                )
+
+            ip_fail_count_key = get_ip_fail_count_key(client_ip)
+            ip_fails = increment_counter(
+                ip_fail_count_key, timeout=LOCKOUT_SECONDS
+            )
+
+            if ip_fails >= IP_MAX_FAILS:
+                lockout_expiry = time.time() + LOCKOUT_SECONDS
+                cache.set(
+                    ip_lockout_key, lockout_expiry,
+                    timeout=LOCKOUT_SECONDS
+                )
+
+                # Update error message immediately to show lockout
+                error_message = (
+                    f"Too many login attempts from this IP address. "
+                    f"Try again in {LOCKOUT_SECONDS // 60} minutes."
+                )
+                form._errors = ErrorDict()
+                form.add_error(None, error_message)
+                return render(request, 'game/login.html', {'form': form})
+
+            if username_fails >= USERNAME_MAX_FAILS:
+                lockout_expiry = time.time() + LOCKOUT_SECONDS
+                cache.set(
+                    username_lockout_key, lockout_expiry,
+                    timeout=LOCKOUT_SECONDS
+                )
+
+                # Update error message immediately to show lockout
+                error_message = (
+                    f"This account is temporarily locked. "
+                    f"Try again in {LOCKOUT_SECONDS // 60} minutes."
+                )
+                form._errors = ErrorDict()
+                form.add_error(None, error_message)
+                return render(request, 'game/login.html', {'form': form})
 
     else:
         form = AuthenticationForm()
