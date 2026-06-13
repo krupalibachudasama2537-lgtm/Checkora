@@ -2466,6 +2466,113 @@ body {
 [data-theme="light"] .faq-answer-content {
     color: #374151;
 }
+
+[data-theme="light"] .navbar {
+    background: rgba(255, 255, 255, 0.85);
+    border-color: rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .bento-visual {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+[data-theme="light"] .about-card-visual {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="light"] .mode-switch-container {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .m-option {
+    color: var(--text-secondary);
+}
+
+[data-theme="light"] .m-avatar {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .ai-hud {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] .ai-node {
+    background: #374151;
+    box-shadow: 0 0 10px #374151;
+}
+
+[data-theme="light"] .ai-edge {
+    stroke: rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .cg-sq.light { background: rgba(0,0,0,0.06); }
+[data-theme="light"] .cg-sq.dark  { background: rgba(0,0,0,0.18); }
+[data-theme="light"] .cg-piece { color: #111827; }
+
+[data-theme="light"] .chess-grid-mini {
+    border-color: rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .lesson-mockup {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .lm-progress-bg {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .about-box {
+    background: rgba(0, 0, 0, 0.02);
+    border-color: rgba(212, 160, 23, 0.25);
+}
+
+[data-theme="light"] .about-progress-bar {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .footer {
+    border-color: rgba(0, 0, 0, 0.06);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .footer-bottom {
+    border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .footer-link {
+    color: #4b5563;
+}
+
+[data-theme="light"] .footer-copy {
+    color: #6b7280;
+}
+
+[data-theme="light"] .footer-socials a {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.08);
+    color: #4b5563;
+}
+
+[data-theme="light"] .dropdown-content {
+    border-color: rgba(0, 0, 0, 0.08);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .dropdown-content a:hover,
+[data-theme="light"] .logout-option:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] #backToTopTooltip {
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--accent-gold);
+    border-color: rgba(212, 160, 23, 0.3);
+}
+
 .modal-scroll-content {
     scrollbar-width: thin;
     scrollbar-color: var(--accent-gold) #131522;
