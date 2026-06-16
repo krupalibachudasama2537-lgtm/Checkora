@@ -49,7 +49,7 @@
     <div class="forum-container">
         <a href="{% url 'forum' %}" class="forum-back-link">← Back to Forum</a>
 
-        <div class="forum-detail-card">
+        <div class="forum-detail-header">
             <h1 class="forum-detail-title">{{ discussion.title }}</h1>
             <div class="forum-card-meta">
                 <span class="forum-author">{{ discussion.user.username }}</span>
@@ -72,19 +72,19 @@
                 <p class="forum-reply-content">{{ reply.content|linebreaks }}</p>
             </div>
             {% endfor %}
-
-            {% if user.is_authenticated %}
-            <form method="post" action="{% url 'forum_reply' discussion.id %}" class="forum-reply-form">
-                {% csrf_token %}
-                {{ form.content }}
-                <button type="submit" class="forum-btn-submit">Post Reply</button>
-            </form>
-            {% else %}
-            <div class="forum-login-prompt">
-                <a href="{% url 'login' %}">Login</a> to join the discussion.
-            </div>
-            {% endif %}
         </div>
     </div>
+
+    {% if user.is_authenticated %}
+    <form method="post" action="{% url 'forum_reply' discussion.id %}" class="forum-reply-bar">
+        {% csrf_token %}
+        {{ form.content }}
+        <button type="submit" class="forum-btn-submit">Post Reply</button>
+    </form>
+    {% else %}
+    <div class="forum-login-prompt">
+        <a href="{% url 'login' %}">Login</a> to join the discussion.
+    </div>
+    {% endif %}
 </body>
 </html>

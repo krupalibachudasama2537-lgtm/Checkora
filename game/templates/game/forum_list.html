@@ -50,18 +50,13 @@
         <div class="forum-header">
             <h1 class="forum-title">Community <span class="gold">Forum</span></h1>
             <p class="forum-subtitle">Discuss strategies, ask questions, and connect with fellow players.</p>
-            {% if user.is_authenticated %}
-                <a href="{% url 'forum_new' %}" class="forum-btn-new">+ New Discussion</a>
-            {% else %}
-                <a href="{% url 'login' %}" class="forum-btn-new">Login to Participate</a>
-            {% endif %}
         </div>
 
         <div class="forum-list">
             {% for discussion in discussions %}
             <a href="{% url 'forum_detail' discussion.id %}" class="forum-card">
                 <div class="forum-card-main">
-                    <h3 class="forum-card-title">{{ discussion.title }}</h3>
+                    <h3 class="forum-card-title"><span class="forum-topic-label">Topic:</span> {{ discussion.title }}</h3>
                     <p class="forum-card-excerpt">{{ discussion.content|truncatewords:25 }}</p>
                     <div class="forum-card-meta">
                         <span class="forum-author">{{ discussion.user.username }}</span>
@@ -80,6 +75,10 @@
             </div>
             {% endfor %}
         </div>
+
+        {% if user.is_authenticated %}
+        <a href="{% url 'forum_new' %}" class="forum-fab-new">+ New Discussion</a>
+        {% endif %}
     </div>
 </body>
 </html>
