@@ -620,6 +620,9 @@
     .sidebar.open {
         display: block;
     }
+    .sidebar.open {
+        display: block;
+    }
 
     main {
         padding: 1.5rem 1rem;
@@ -629,7 +632,14 @@
         width: 100%;
         max-width: 300px;
     }
+    .mini-board {
+        width: 100%;
+        max-width: 300px;
+    }
 
+    .mini-board-container {
+        flex-direction: column;
+    }
     .mini-board-container {
         flex-direction: column;
     }
@@ -670,7 +680,7 @@
         position: fixed;
         top: calc(var(--header-height) + 8px);
         right: 12px;
-        left: auto;
+        left: auto !important;
         width: 260px;
         height: calc(100vh - var(--header-height) - 20px);
         overflow-y: auto;
@@ -1372,10 +1382,9 @@ function toggleSidebar() {
 function closeSidebar() {
     document.querySelector('.sidebar').classList.remove('open');
 
-    if (window.innerWidth > 400) {
-        document.getElementById('sidebarOverlay').classList.remove('open');
-        document.getElementById('sidebarOverlay').setAttribute('aria-hidden', 'true');
-    }
+    const overlay = document.getElementById('sidebarOverlay');
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
 
     document.getElementById('menuToggle').setAttribute('aria-expanded', 'false');
 }
