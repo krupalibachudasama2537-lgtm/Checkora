@@ -1857,18 +1857,41 @@ def leaderboard_view(request):
 @login_required
 @require_POST
 def update_puzzle_stats(request):
-    data = json.loads(request.body)
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'invalid json'}, status=400)
 
-    stats, _ = PuzzleStats.objects.get_or_create(
+    if not isinstance(data, dict):
+        return JsonResponse({'error': 'invalid json'}, status=400)
+
+    stats = PuzzleStats.objects.filter(
         user=request.user
-    )
+    ).first()
 
-    stats.puzzles_solved = data.get("puzzles_solved", 0)
-    stats.current_streak = data.get("current_streak", 0)
-    stats.best_streak = data.get("best_streak", 0)
-    stats.daily_completions = data.get("daily_completions", 0)
+    fields = ["puzzles_solved", "current_streak", "best_streak", "daily_completions"]
+    validated_data = {}
+    for field in fields:
+        val = data.get(field, getattr(stats, field) if stats is not None else 0)
+        if not isinstance(val, int) or isinstance(val, bool) or val < 0:
+            return JsonResponse({'error': f'{field} must be a non-negative integer'}, status=400)
+        validated_data[field] = val
 
-    stats.save()
+    if validated_data["best_streak"] < validated_data["current_streak"]:
+        return JsonResponse({'error': 'best_streak must be greater than or equal to current_streak'}, status=400)
+
+    if stats is None:
+        stats = PuzzleStats(user=request.user)
+
+    stats.puzzles_solved = validated_data["puzzles_solved"]
+    stats.current_streak = validated_data["current_streak"]
+    stats.best_streak = validated_data["best_streak"]
+    stats.daily_completions = validated_data["daily_completions"]
+
+    try:
+        stats.save()
+    except IntegrityError:
+        return JsonResponse({'error': 'Integrity validation failed.'}, status=400)
 
     check_puzzle_achievements(
         request.user,
@@ -3504,6 +3527,7 @@ def achievements_view(request):
     )
 
 @login_required
+@require_POST
 def feature_badge(request, achievement_id):
     achievement = get_object_or_404(
         Achievement,
@@ -3544,6 +3568,7 @@ def feature_badge(request, achievement_id):
     return redirect("achievements")
 
 @login_required
+@require_POST
 def remove_featured_badge(request, badge_id):
     FeaturedBadge.objects.filter(
         id=badge_id,
