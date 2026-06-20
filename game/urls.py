@@ -44,6 +44,11 @@ urlpatterns = [
     path("lessons/", views.lesson_map_view, name="lessons"),
     path('lessons/<str:lesson_name>/', views.lesson_detail_view, name='lesson_detail'),
     path('lessons/<str:lesson_name>/complete/', views.complete_lesson, name='complete_lesson'),
+    
+    # Opening Trainer
+    path("openings/", views.opening_trainer, name="opening_trainer"),
+    path("openings/<slug:slug>/", views.opening_detail, name="opening_detail"),
+
     path("api/puzzle-stats/", views.puzzle_stats_view, name="puzzle_stats"),
     path("api/puzzles/daily/", views.get_daily_puzzle, name="daily_puzzle"),
     
@@ -58,4 +63,17 @@ urlpatterns = [
     path("forum/new/", views.forum_new, name="forum_new"),
     path("forum/<int:discussion_id>/", views.forum_detail, name="forum_detail"),
     path("forum/<int:discussion_id>/reply/", views.forum_reply, name="forum_reply"),
+
+    # Reply actions
+    path(
+        "forum/reply/<int:reply_id>/edit/",
+        views.forum_reply_edit,
+        name="forum_reply_edit",
+    ),
+
+    path(
+        "forum/reply/<int:reply_id>/delete/",
+        views.forum_reply_delete,
+        name="forum_reply_delete",
+    ),
 ]
